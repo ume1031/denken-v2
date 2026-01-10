@@ -101,12 +101,11 @@ def index():
     for i in range(6, -1, -1):
         d_str = (now_jst - timedelta(days=i)).strftime('%m/%d')
         chart_labels.append(d_str)
+        # 指定した日のログを取得
         day_logs = [l for l in logs if l.get('date') == d_str and (selected_cat == 'すべて' or l.get('cat') == selected_cat)]
-        if day_logs:
-            acc = sum(1 for l in day_logs if l.get('correct')) / len(day_logs) * 100
-            chart_values.append(round(acc, 1))
-        else:
-            chart_values.append(0)
+        
+        # 修正箇所: 正答率ではなく「解いた問題数」をカウント
+        chart_values.append(len(day_logs))
             
     days_left = max(0, (datetime(2026, 3, 22, tzinfo=JST) - now_jst).days)
     
@@ -196,12 +195,9 @@ def answer(card_id):
     # --- 苦手リスト(wrong_list)の更新ロジックを強化 ---
     if is_correct:
         session['correct_count'] += 1
-        # 正解した場合、IDがリストに含まれていれば確実に削除する
         if card_id in storage['wrong_list']:
-            # filterを使って完全に排除
             storage['wrong_list'] = [i for i in storage['wrong_list'] if i != card_id]
     else:
-        # 不正解の場合、リストに追加（重複防止）
         if card_id not in storage['wrong_list']:
             storage['wrong_list'].append(card_id)
     
@@ -219,6 +215,14 @@ def answer(card_id):
     idx = session['total_in_session'] - len(session['quiz_queue'])
     progress = int((idx/session['total_in_session'])*100)
     
+    # --- グラフ表示用の統計データを取得（indexと同様のロジック） ---
+    chart_labels, chart_values = [], []
+    for i in range(6, -1, -1):
+        d_str = (now_jst - timedelta(days=i)).strftime('%m/%d')
+        chart_labels.append(d_str)
+        day_logs = [l for l in storage['logs'] if l.get('date') == d_str]
+        chart_values.append(len(day_logs))
+
     resp = make_response(render_template('study.html', 
                                          card=card, 
                                          display_q=card['front'], 
@@ -227,9 +231,10 @@ def answer(card_id):
                                          mode=current_mode, 
                                          current=idx, 
                                          total=session['total_in_session'], 
-                                         progress=progress))
+                                         progress=progress,
+                                         labels=chart_labels,    # グラフ用
+                                         values=chart_values))   # グラフ用
                                          
-    # 修正：確実に最新のstorageをCookieに反映させる
     storage_json = json.dumps(storage, separators=(',', ':'))
     resp.set_cookie('denken_storage', storage_json, max_age=60*60*24*365, path='/', samesite='Lax')
     return resp

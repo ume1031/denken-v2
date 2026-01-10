@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>電験三種 学習システム V2.1</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --primary-color: #2563eb; --correct-color: #10b981; --wrong-color: #ef4444; }
         body { background-color: #f3f4f6; font-family: 'Helvetica Neue', Arial, sans-serif; }
@@ -33,6 +34,9 @@
         .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); }
         .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
         .home-link:hover { color: #374151; text-decoration: underline; }
+        
+        /* グラフ用スタイル */
+        .chart-container { margin-top: 30px; padding: 20px; background: #fff; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
@@ -83,11 +87,40 @@
                     </div>
                 </div>
 
+                <div class="chart-container">
+                    <h6 class="text-center mb-3 fw-bold">直近7日間の学習問題数推移</h6>
+                    <canvas id="progressChart" height="150"></canvas>
+                </div>
+
                 <div class="text-center mt-5">
                     <a href="/study" class="btn btn-primary btn-next">
                         {% if current == total %}すべての学習を終了する{% else %}次の問題へ進む{% endif %}
                     </a>
                 </div>
+
+                <script>
+                    const ctx = document.getElementById('progressChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: {{ labels|tojson }},
+                            datasets: [{
+                                label: '解いた問題数',
+                                data: {{ values|tojson }},
+                                backgroundColor: 'rgba(37, 99, 235, 0.2)',
+                                borderColor: 'rgba(37, 99, 235, 1)',
+                                borderWidth: 2,
+                                borderRadius: 5
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                </script>
             {% endif %}
         </div>
     </div>
