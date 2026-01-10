@@ -3,54 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>電験三種 学習 V2.1</title>
+    <title>電験三種 学習システム V2.1</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         :root { --primary-color: #2563eb; --correct-color: #10b981; --wrong-color: #ef4444; }
-        body { background-color: #f3f4f6; }
+        body { background-color: #f3f4f6; font-family: 'Helvetica Neue', Arial, sans-serif; }
         .study-container { max-width: 700px; margin: 40px auto; }
-        .card { border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
-        .ox-btn { flex: 1; height: 150px; font-size: 5rem; border-radius: 20px; border: 3px solid #e5e7eb; background: white; }
-        .explanation-box { margin-top: 25px; padding: 25px; border-radius: 15px; display: none; }
-        .explanation-box.show { display: block; }
-        .res-correct { background-color: #ecfdf5; border: 2px solid #10b981; color: #065f46; }
-        .res-wrong { background-color: #fef2f2; border: 2px solid #ef4444; color: #991b1b; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; }
+        .progress { height: 8px; border-radius: 0; background-color: #e5e7eb; }
+        .progress-bar { background-color: var(--primary-color); transition: width 0.4s ease; }
+        .card-body { padding: 30px; }
+        .category-badge { display: inline-block; padding: 4px 12px; background: #dbeafe; color: var(--primary-color); border-radius: 20px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; }
+        .question-text { font-size: 1.35rem; line-height: 1.7; color: #1f2937; margin-bottom: 30px; min-height: 120px; font-weight: 500; }
+        
+        /* 回答ボタンのスタイル */
+        .choice-btn { display: block; width: 100%; padding: 18px; margin-bottom: 15px; text-align: left; border: 2px solid #e5e7eb; border-radius: 14px; background: white; transition: all 0.2s; font-weight: 600; font-size: 1.05rem; }
+        .choice-btn:hover { border-color: var(--primary-color); background-color: #f8faff; transform: translateY(-2px); }
+        
+        /* ○×専用の巨大ボタン */
+        .ox-container { display: flex; gap: 25px; margin-top: 10px; }
+        .ox-btn { 
+            flex: 1; 
+            height: 160px; 
+            font-size: 5.5rem; 
+            border-radius: 24px; 
+            border: 3px solid #e5e7eb; 
+            background: white; 
+            transition: all 0.2s; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.05);
+        }
+        .ox-btn-o { color: var(--correct-color); }
+        .ox-btn-o:hover { border-color: var(--correct-color); background-color: #ecfdf5; transform: scale(1.03); }
+        .ox-btn-x { color: var(--wrong-color); }
+        .ox-btn-x:hover { border-color: var(--wrong-color); background-color: #fef2f2; transform: scale(1.03); }
+
+        /* 回答後の解説エリア */
+        .explanation-box { margin-top: 30px; padding: 25px; border-radius: 18px; display: none; border-left: 8px solid; }
+        .explanation-box.show { display: block; animation: slideIn 0.3s ease-out; }
+        .res-correct { background-color: #ecfdf5; border-color: #10b981; color: #065f46; }
+        .res-wrong { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; }
+        
+        @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); }
+        .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
+        .home-link:hover { color: #374151; text-decoration: underline; }
     </style>
 </head>
 <body>
-<div class="study-container">
-    <div class="card p-4">
-        <div class="mb-3 d-flex justify-content-between">
-            <span class="badge bg-primary">{{ card.category }}</span>
-            <span>問題 {{ current }} / {{ total }}</span>
-        </div>
-        <div class="h4 mb-4">{{ display_q }}</div>
 
-        {% if not is_answered %}
-            <form action="/answer/{{ card.id }}" method="POST">
-                {% if mode == 'fill' %}
-                    {% for choice in choices %}
-                        <button type="submit" name="user_answer" value="{{ choice }}" class="btn btn-outline-primary w-100 mb-2 p-3 text-start">{{ choice }}</button>
-                    {% endfor %}
-                {% else %}
-                    <div class="d-flex gap-3">
-                        <button type="submit" name="user_answer" value="正解" class="ox-btn text-success">○</button>
-                        <button type="submit" name="user_answer" value="不正解" class="ox-btn text-danger">×</button>
+<div class="study-container">
+    <div class="card">
+        <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: {{ progress }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="category-badge">{{ card.category }}</span>
+                <span class="badge bg-light text-dark border px-3 py-2">問題 {{ current }} / {{ total }}</span>
+            </div>
+
+            <div class="question-text">
+                {{ display_q }}
+            </div>
+
+            {% if not is_answered %}
+                <form action="/answer/{{ card.id }}" method="POST" id="answerForm">
+                    {% if mode == 'fill' %}
+                        <div class="choices-list">
+                            {% for choice in choices %}
+                                <button type="submit" name="user_answer" value="{{ choice }}" class="choice-btn">
+                                    {{ choice }}
+                                </button>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="ox-container">
+                            <button type="submit" name="user_answer" value="正解" class="ox-btn ox-btn-o">○</button>
+                            <button type="submit" name="user_answer" value="不正解" class="ox-btn ox-btn-x">×</button>
+                        </div>
+                        <p class="text-center text-muted mt-4">記述が正しいなら「○」、誤りなら「×」を選択してください</p>
+                    {% endif %}
+                </form>
+            {% else %}
+                <div class="explanation-box show {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
+                    <div class="d-flex align-items-center mb-3">
+                        <div style="font-size: 2.8rem; margin-right: 20px;">
+                            {% if is_correct %}⭕{% else %}❌{% endif %}
+                        </div>
+                        <div>
+                            <h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% else %}不正解です{% endif %}</h3>
+                            <p class="mb-0 small opacity-75">{% if is_correct %}お見事！その調子です。{% else %}次は頑張りましょう。{% endif %}</p>
+                        </div>
                     </div>
-                {% endif %}
-            </form>
-        {% else %}
-            <div class="explanation-box show {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
-                <h3 class="mb-3">{% if is_correct %}⭕ 正解！{% else %}❌ 不正解...{% endif %}</h3>
-                <hr>
-                <div class="fw-bold mb-1 text-secondary">【解説】</div>
-                <p class="mb-0 fs-5">{{ card.note }}</p>
-            </div>
-            <div class="text-center mt-4">
-                <a href="/study" class="btn btn-primary px-5 py-3 fw-bold">{% if current == total %}結果へ{% else %}次の問題へ{% endif %}</a>
-            </div>
-        {% endif %}
+                    
+                    <hr style="border-top: 2px solid rgba(0,0,0,0.1);">
+                    
+                    <div class="explanation-content">
+                        <div class="fw-bold mb-2" style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">【 解説 】</div>
+                        <p class="mb-0" style="font-size: 1.15rem; line-height: 1.6; white-space: pre-wrap;">{{ card.note }}</p>
+                    </div>
+                </div>
+
+                <div class="text-center mt-5">
+                    <a href="/study" class="btn btn-primary btn-next">
+                        {% if current == total %}すべての学習を終了する{% else %}次の問題へ進む{% endif %}
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="text-center">
+        <a href="/home" class="home-link">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-house-door-fill me-1" viewBox="0 0 16 16">
+                <path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5"/>
+            </svg>
+            学習を中断してホームへ戻る
+        </a>
     </div>
 </div>
+
+<script>
+    // 二重クリックによる重複送信を防止するためのスクリプト
+    document.getElementById('answerForm')?.addEventListener('submit', function() {
+        const buttons = this.querySelectorAll('button');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+        });
+    });
+</script>
+
 </body>
 </html>
