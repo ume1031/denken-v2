@@ -9,12 +9,7 @@
         :root { --primary-color: #2563eb; --correct-color: #10b981; --wrong-color: #ef4444; }
         body { background-color: #f3f4f6; font-family: 'Helvetica Neue', Arial, sans-serif; -webkit-text-size-adjust: 100%; }
         
-        /* iOS Safari対策: ボタンのデフォルトスタイルを完全に無効化 */
-        button {
-            -webkit-appearance: none;
-            appearance: none;
-            border-radius: 14px;
-        }
+        button { -webkit-appearance: none; appearance: none; border-radius: 14px; }
 
         .study-container { max-width: 700px; margin: 40px auto; padding: 0 15px; }
         .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; background-color: #ffffff; }
@@ -24,40 +19,17 @@
         .category-badge { display: inline-block; padding: 4px 12px; background: #dbeafe; color: var(--primary-color); border-radius: 20px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; }
         .question-text { font-size: 1.35rem; line-height: 1.7; color: #1f2937; margin-bottom: 30px; min-height: 120px; font-weight: 500; }
         
-        /* iOSでの白飛び・文字色消え対策 */
         .choice-btn { 
-            display: block; 
-            width: 100%; 
-            padding: 18px; 
-            margin-bottom: 15px; 
-            text-align: left; 
-            border: 2px solid #e5e7eb; 
-            border-radius: 14px; 
-            background-color: #ffffff !important; 
-            color: #1f2937 !important; 
-            transition: all 0.2s; 
-            font-weight: 600; 
-            font-size: 1.05rem; 
-            cursor: pointer;
+            display: block; width: 100%; padding: 18px; margin-bottom: 15px; text-align: left; 
+            border: 2px solid #e5e7eb; border-radius: 14px; background-color: #ffffff !important; 
+            color: #1f2937 !important; transition: all 0.2s; font-weight: 600; font-size: 1.05rem; cursor: pointer;
         }
-        .choice-btn:hover, .choice-btn:active { 
-            border-color: var(--primary-color); 
-            background-color: #f8faff !important; 
-        }
+        .choice-btn:hover, .choice-btn:active { border-color: var(--primary-color); background-color: #f8faff !important; }
 
         .ox-container { display: flex; gap: 20px; margin-top: 10px; }
         .ox-btn { 
-            flex: 1; 
-            height: 140px; 
-            font-size: 4.5rem; 
-            border-radius: 24px; 
-            border: 3px solid #e5e7eb; 
-            background: white !important; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            box-shadow: 0 6px 12px rgba(0,0,0,0.05);
-            -webkit-appearance: none;
+            flex: 1; height: 140px; font-size: 4.5rem; border-radius: 24px; border: 3px solid #e5e7eb; 
+            background: white !important; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 12px rgba(0,0,0,0.05);
         }
         .ox-btn-o { color: var(--correct-color) !important; }
         .ox-btn-x { color: var(--wrong-color) !important; }
@@ -66,9 +38,7 @@
         .res-correct { background-color: #ecfdf5; border-color: #10b981; color: #065f46; }
         .res-wrong { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; }
         
-        /* 正解表示ボックス */
         .correct-reveal { background: #ffffff; border: 2px solid var(--correct-color); border-radius: 12px; padding: 15px; margin-bottom: 20px; color: #1f2937; }
-
         .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); text-decoration: none; display: inline-block; }
         .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
     </style>
@@ -77,16 +47,12 @@
 
 <div class="study-container">
     <div class="card">
-        <div class="progress">
-            <div class="progress-bar" role="progressbar" style="width: {{ progress }}%;"></div>
-        </div>
-
+        <div class="progress"><div class="progress-bar" role="progressbar" style="width: {{ progress }}%;"></div></div>
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <span class="category-badge">{{ card.category }}</span>
                 <span class="badge bg-light text-dark border px-3 py-2">問題 {{ current }} / {{ total }}</span>
             </div>
-
             <div class="question-text">{{ display_q }}</div>
 
             {% if not is_answered %}
@@ -94,7 +60,7 @@
                     {% if mode == 'fill' %}
                         <div class="choices-list">
                             {% for choice in choices %}
-                                <button type="submit" name="user_answer" value="{{ choice|trim }}" class="choice-btn">{{ choice if choice else "---" }}</button>
+                                <button type="submit" name="user_answer" value="{{ choice|trim }}" class="choice-btn">{{ choice }}</button>
                             {% endfor %}
                         </div>
                     {% else %}
@@ -107,41 +73,30 @@
             {% else %}
                 <div class="explanation-box {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
                     <div class="d-flex align-items-center mb-3">
-                        <div style="font-size: 2.8rem; margin-right: 20px;">
-                            {% if is_correct %}⭕{% else %}❌{% endif %}
-                        </div>
-                        <div>
-                            <h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% else %}不正解です{% endif %}</h3>
-                        </div>
+                        <div style="font-size: 2.8rem; margin-right: 20px;">{% if is_correct %}⭕{% else %}❌{% endif %}</div>
+                        <div><h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% endif %}{% if not is_correct %}不正解です{% endif %}</h3></div>
                     </div>
-
                     {% if not is_correct and mode == 'fill' %}
                     <div class="correct-reveal">
                         <span class="badge bg-success mb-2" style="color:white;">正解の選択肢</span>
                         <div class="fs-4 fw-bold text-success">{{ correct_answer }}</div>
                     </div>
                     {% endif %}
-
                     <hr style="border-top: 2px solid rgba(0,0,0,0.1);">
                     <div class="explanation-content">
                         <div class="fw-bold mb-2">【 解説 】</div>
                         <p class="mb-0" style="font-size: 1.15rem; line-height: 1.6; white-space: pre-wrap;">{{ card.note }}</p>
                     </div>
                 </div>
-
                 <div class="text-center mt-5">
                     <a href="/next_question" class="btn btn-primary btn-next">
-                        {% if current == total %}すべての学習を終了する{% else %}次の問題へ進む{% endif %}
+                        {% if current == total %}終了する{% else %}次へ進む{% endif %}
                     </a>
                 </div>
             {% endif %}
         </div>
     </div>
-    
-    <div class="text-center">
-        <a href="/home" class="home-link">学習を中断してホームへ戻る</a>
-    </div>
+    <div class="text-center"><a href="/home" class="home-link">ホームへ戻る</a></div>
 </div>
-
 </body>
 </html>
