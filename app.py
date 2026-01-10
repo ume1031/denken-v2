@@ -51,7 +51,7 @@ TARGET_CATEGORIES = [
 def load_csv_data(mode):
     """
     CSVファイルを読み込む。IDを「カテゴリ_行番号」の形に固定し、
-    ファイル名に依存しすぎないようにしてCookieの肥大化を防ぐ。
+    ファイル名に依存しすぎないようにしてCookie의肥大化を防ぐ。
     """
     folder_mode = 'taku4' if mode == 'fill' else 'normal'
     search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
@@ -73,8 +73,9 @@ def load_csv_data(mode):
 
                         dummies = []
                         if mode == 'fill':
-                            raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 7 else []
-                            dummies = [d for d in raw_dummies if d]
+                            # 【修正】ダミー選択肢を5列目から7列目まで柔軟に取得
+                            raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 5 else []
+                            dummies = [d for d in raw_dummies if d and d != cleaned_row[2]]
 
                         questions.append({
                             'id': q_id, 
@@ -187,10 +188,12 @@ def study():
         # 選択肢の生成
         correct_answer = str(card['back']).strip()
         choices = [correct_answer] + [str(d).strip() for d in card.get('dummies', [])]
-        # 不足分を補填
+        
+        # 【iOS対策】空文字回避のためダミーを補填し、ログ出力
         while len(choices) < 4:
-            choices.append("---")
+            choices.append(f"ダミー選択肢_{len(choices)}")
         random.shuffle(choices)
+        print(f"DEBUG: Mode={current_mode}, ID={card['id']}, Choices_Count={len(choices)}")
 
     idx = session['total_in_session'] - len(session['quiz_queue']) + 1
     progress = int(((idx-1)/session['total_in_session'])*100)
@@ -244,11 +247,11 @@ def answer(card_id):
     idx = session['total_in_session'] - len(session['quiz_queue'])
     progress = int((idx/session['total_in_session'])*100)
     
-    # 解説画面用に今回の結果を一時保存
+    # 解説画面用に今回の結果を一時保存（correct_answerを渡すように追加）
     session['last_result'] = {
         'card': card,
         'is_correct': is_correct,
-        'correct_answer': correct_answer, # 解説画面用に正解を保持
+        'correct_answer': correct_answer, 
         'current': idx,
         'progress': progress
     }
