@@ -31,7 +31,9 @@ def get_storage(request):
             print(f"Storage Load Error: {e}")
             storage = {"wrong_list": [], "logs": []}
     
-    # 簡略化せず、すべてのキーの存在をチェックして補完
+    # キーの存在を確実に保証（復習モードが動かない原因を排除）
+    if not isinstance(storage, dict):
+        storage = {"wrong_list": [], "logs": []}
     if 'wrong_list' not in storage:
         storage['wrong_list'] = []
     if 'logs' not in storage:
@@ -49,7 +51,7 @@ TARGET_CATEGORIES = [
 def load_csv_data(mode):
     """
     指定されたモード (ox または fill) に応じてCSVファイルを読み込む。
-    【重要】読み込み時にすべての要素に対して .strip() を適用し、改行コード(\r, \n)を除去。
+    読み込み時にすべての要素に対して .strip() を適用し、改行コードを除去。
     """
     folder_mode = 'taku4' if mode == 'fill' else 'normal'
     search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
@@ -65,12 +67,10 @@ def load_csv_data(mode):
                 reader = csv.reader(f)
                 for i, row in enumerate(reader):
                     if len(row) >= 3:
-                        # 全要素から空白と改行を除去
                         cleaned_row = [str(cell).strip().replace('\r', '').replace('\n', '') for cell in row]
                         
                         dummies = []
                         if mode == 'fill':
-                            # 4択(taku4)のダミー選択肢 (択1, 択2, 択3) を取得
                             raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 7 else []
                             dummies = [d for d in raw_dummies if d]
 
@@ -78,7 +78,7 @@ def load_csv_data(mode):
                             'id': f"{mode}_{os.path.basename(f_path)}_{i}", 
                             'category': cleaned_row[0], 
                             'front': cleaned_row[1], 
-                            'back': cleaned_row[2], # ここが正解
+                            'back': cleaned_row[2], 
                             'note': cleaned_row[3] if len(cleaned_row) > 3 else "解説はありません。",
                             'dummies': dummies
                         })
@@ -121,11 +121,13 @@ def start_study():
     mode = request.form.get('mode', 'fill')
     cat = request.form.get('cat', 'すべて')
     q_count = int(request.form.get('q_count', 10))
-    is_review = request.form.get('review') == 'true'
+    is_review = (request.form.get('review') == 'true')
     storage = get_storage(request)
     
     if is_review:
+        # 復習モード：CookieにあるIDのリストを取得
         wrong_ids = storage.get('wrong_list', [])
+        # 全データの中からIDが一致するものだけを抽出
         all_q = load_csv_data('fill') + load_csv_data('ox')
         all_q = [q for q in all_q if q['id'] in wrong_ids]
     else:
@@ -156,11 +158,9 @@ def study():
     choices = []
     
     if current_mode == 'fill':
-        # 正解を穴埋め表示に置換
         if card['back'] in card['front']:
             display_q = card['front'].replace(card['back'], " 【 ？ 】 ")
         
-        # 選択肢を洗浄した上でシャッフル
         choices = [str(card['back']).strip()] + [str(d).strip() for d in card.get('dummies', [])]
         while len(choices) < 4:
             choices.append("---")
@@ -188,17 +188,19 @@ def answer(card_id):
     storage = get_storage(request)
     now_jst = get_jst_now()
     
-    # ユーザー回答と正解を完全に洗浄して比較
     user_answer = str(request.form.get('user_answer', '')).strip().replace('\r', '').replace('\n', '')
     correct_answer = str(card['back']).strip().replace('\r', '').replace('\n', '')
     
     is_correct = (user_answer == correct_answer)
     
+    # --- 苦手リスト(wrong_list)の更新ロジック ---
     if is_correct:
         session['correct_count'] += 1
+        # 正解した場合、もしリストにあれば削除
         if card_id in storage['wrong_list']:
             storage['wrong_list'].remove(card_id)
     else:
+        # 不正解の場合、リストに追加（重複防止）
         if card_id not in storage['wrong_list']:
             storage['wrong_list'].append(card_id)
     
@@ -210,13 +212,14 @@ def answer(card_id):
     })
     storage['logs'] = storage['logs'][-1000:]
     
+    # 出題キューから削除
     session['quiz_queue'].pop(0)
     session.modified = True 
     
     idx = session['total_in_session'] - len(session['quiz_queue'])
     progress = int((idx/session['total_in_session'])*100)
     
-    # Cookieとレスポンスを返す
+    # Cookieをセットしたレスポンスを返す
     resp = make_response(render_template('study.html', 
                                          card=card, 
                                          display_q=card['front'], 
@@ -227,7 +230,8 @@ def answer(card_id):
                                          total=session['total_in_session'], 
                                          progress=progress))
                                          
-    resp.set_cookie('denken_storage', json.dumps(storage), max_age=60*60*24*365)
+    # JSON化してCookieに保存 (有効期限1年)
+    resp.set_cookie('denken_storage', json.dumps(storage), max_age=60*60*24*365, samesite='Lax')
     return resp
 
 @app.route('/result')
