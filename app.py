@@ -167,6 +167,7 @@ def study():
                                display_q=card['front'], 
                                is_answered=True, 
                                is_correct=last_result['is_correct'], 
+                               correct_answer=last_result.get('correct_answer'), # 正解を追加
                                mode=current_mode, 
                                current=last_result['current'], 
                                total=session['total_in_session'], 
@@ -247,6 +248,7 @@ def answer(card_id):
     session['last_result'] = {
         'card': card,
         'is_correct': is_correct,
+        'correct_answer': correct_answer, # 解説画面用に正解を保持
         'current': idx,
         'progress': progress
     }

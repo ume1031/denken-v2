@@ -33,6 +33,16 @@
         .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); }
         .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
         .home-link:hover { color: #374151; text-decoration: underline; }
+
+        /* 追加スタイル: 正解の表示用 */
+        .correct-reveal {
+            background: #ffffff;
+            border: 2px solid var(--correct-color);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
     </style>
 </head>
 <body>
@@ -76,6 +86,15 @@
                             <h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% else %}不正解です{% endif %}</h3>
                         </div>
                     </div>
+
+                    {# 修正ポイント: 不正解かつ4択(fill)モードの場合、正解を表示する #}
+                    {% if not is_correct and mode == 'fill' %}
+                    <div class="correct-reveal">
+                        <span class="badge bg-success mb-2">正解の選択肢</span>
+                        <div class="fs-4 fw-bold text-success">{{ correct_answer }}</div>
+                    </div>
+                    {% endif %}
+
                     <hr style="border-top: 2px solid rgba(0,0,0,0.1);">
                     <div class="explanation-content">
                         <div class="fw-bold mb-2">【 解説 】</div>
