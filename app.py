@@ -41,17 +41,19 @@ def get_storage(request):
         
     return storage
 
-# 学習対象となる15分野の定義
-TARGET_CATEGORIES = [
-    "理論", "直流機", "誘導機", "同期機", "変圧器", 
+# 分野の再定義
+THEORY_CAT = ["理論"]
+MACHINE_CATS = [
+    "直流機", "誘導機", "同期機", "変圧器", 
     "四機総合問題", "電動機応用", "電気機器", "パワーエレクトロニクス", 
     "自動制御", "照明", "電熱", "電気化学", "メカトロニクス", "情報伝送及び処理"
 ]
+TARGET_CATEGORIES = THEORY_CAT + MACHINE_CATS
 
 def load_csv_data(mode):
     """
     CSVファイルを読み込む。IDを「カテゴリ_行番号」の形に固定し、
-    ファイル名に依存しすぎないようにしてCookie의肥大化を防ぐ。
+    ファイル名に依存しすぎないようにしてCookieの肥大化を防ぐ。
     """
     folder_mode = 'taku4' if mode == 'fill' else 'normal'
     search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
@@ -73,9 +75,9 @@ def load_csv_data(mode):
 
                         dummies = []
                         if mode == 'fill':
-                            # 【修正】ダミー選択肢を5列目から7列目まで柔軟に取得
-                            raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 5 else []
-                            dummies = [d for d in raw_dummies if d and d != cleaned_row[2]]
+                            # 改良：正解と解説以外の列（5列目以降）からダミーを抽出
+                            raw_candidates = cleaned_row[4:] 
+                            dummies = [d for d in raw_candidates if d and d != cleaned_row[2]]
 
                         questions.append({
                             'id': q_id, 
@@ -95,29 +97,43 @@ def index():
     storage = get_storage(request)
     wrong_count = len(storage.get('wrong_list', []))
     now_jst = get_jst_now()
-    selected_cat = request.args.get('chart_cat', 'すべて')
+    
+    # グラフ表示用のフィルタリング
+    selected_group = request.args.get('chart_cat', 'すべて')
     logs = storage.get('logs', [])
     
     chart_labels, chart_values = [], []
     for i in range(6, -1, -1):
         d_str = (now_jst - timedelta(days=i)).strftime('%m/%d')
         chart_labels.append(d_str)
-        day_logs = [l for l in logs if l.get('date') == d_str and (selected_cat == 'すべて' or l.get('cat') == selected_cat)]
+        
+        # 修正：グラフの値を「正答率」ではなく「解答数（問題数）」として集計
+        day_logs = []
+        for l in logs:
+            if l.get('date') == d_str:
+                cat = l.get('cat')
+                if selected_group == 'すべて':
+                    day_logs.append(l)
+                elif selected_group == '理論' and cat in THEORY_CAT:
+                    day_logs.append(l)
+                elif selected_group == '機械' and cat in MACHINE_CATS:
+                    day_logs.append(l)
         chart_values.append(len(day_logs))
             
     days_left = max(0, (datetime(2026, 3, 22, tzinfo=JST) - now_jst).days)
     
     return render_template('index.html', 
-                           categories=TARGET_CATEGORIES, 
+                           theory_cats=THEORY_CAT,
+                           machine_cats=MACHINE_CATS,
                            days_left=days_left, 
                            wrong_count=wrong_count, 
                            labels=chart_labels, 
                            values=chart_values, 
-                           selected_cat=selected_cat)
+                           selected_cat=selected_group)
 
 @app.route('/start_study', methods=['POST'])
 def start_study():
-    # 【重要】新しい学習を始める際、前回のセッション残骸を完全にクリア
+    # 学習開始時にセッションを初期化
     session.pop('quiz_queue', None)
     session.pop('last_result', None)
     session.pop('total_in_session', None)
@@ -125,7 +141,13 @@ def start_study():
 
     mode = request.form.get('mode', 'fill')
     cat = request.form.get('cat', 'すべて')
-    q_count = int(request.form.get('q_count', 10))
+    
+    # 修正：q_countが確実に数値として取得されるようにし、挙動不審を解消
+    try:
+        q_count = int(request.form.get('q_count', 10))
+    except (TypeError, ValueError):
+        q_count = 10
+        
     is_review = (request.form.get('review') == 'true')
     
     storage = get_storage(request)
@@ -137,12 +159,18 @@ def start_study():
     else:
         all_q = load_csv_data(mode)
     
-    if cat != 'すべて':
+    # カテゴリフィルタリング（理論/機械の親カテゴリ対応）
+    if cat == '理論':
+        all_q = [q for q in all_q if q['category'] in THEORY_CAT]
+    elif cat == '機械':
+        all_q = [q for q in all_q if q['category'] in MACHINE_CATS]
+    elif cat != 'すべて':
         all_q = [q for q in all_q if q['category'] == cat]
 
     if not all_q:
         return redirect(url_for('index'))
 
+    # 指定された問題数でランダムサンプリング
     selected_qs = random.sample(all_q, min(len(all_q), q_count))
     session['quiz_queue'] = selected_qs
     session['total_in_session'] = len(selected_qs)
@@ -152,11 +180,10 @@ def start_study():
 
 @app.route('/study')
 def study():
-    # PRGパターン: 回答結果（解説画面）を表示すべきかチェック
     last_result = session.get('last_result')
     
-    # 全ての問題が終了し、かつ表示する結果もない場合はリザルト画面へ
     if not last_result and not session.get('quiz_queue'):
+        # 修正：リザルト画面への遷移を確実に
         return redirect(url_for('show_result'))
 
     # --- 解説画面の表示 ---
@@ -168,13 +195,16 @@ def study():
                                display_q=card['front'], 
                                is_answered=True, 
                                is_correct=last_result['is_correct'], 
-                               correct_answer=last_result.get('correct_answer'), # 正解を追加
+                               correct_answer=last_result.get('correct_answer'),
                                mode=current_mode, 
                                current=last_result['current'], 
                                total=session['total_in_session'], 
                                progress=last_result['progress'])
 
     # --- 問題画面の表示 ---
+    if not session.get('quiz_queue'):
+        return redirect(url_for('show_result'))
+        
     card = session['quiz_queue'][0]
     current_mode = 'fill' if card['id'].startswith('f_') else 'ox'
     
@@ -185,15 +215,11 @@ def study():
         if card['back'] in card['front']:
             display_q = card['front'].replace(card['back'], " 【 ？ 】 ")
         
-        # 選択肢の生成
         correct_answer = str(card['back']).strip()
         choices = [correct_answer] + [str(d).strip() for d in card.get('dummies', [])]
-        
-        # 【iOS対策】空文字回避のためダミーを補填し、ログ出力
         while len(choices) < 4:
-            choices.append(f"ダミー選択肢_{len(choices)}")
+            choices.append(f"選択肢{len(choices)+1}")
         random.shuffle(choices)
-        print(f"DEBUG: Mode={current_mode}, ID={card['id']}, Choices_Count={len(choices)}")
 
     idx = session['total_in_session'] - len(session['quiz_queue']) + 1
     progress = int(((idx-1)/session['total_in_session'])*100)
@@ -210,10 +236,6 @@ def study():
 
 @app.route('/answer/<card_id>', methods=['POST'])
 def answer(card_id):
-    """
-    回答を処理し、結果をセッションに保存して /study へリダイレクトする。
-    これにより「フォームの再送信」を防ぐ。
-    """
     if not session.get('quiz_queue'):
         return redirect(url_for('index'))
         
@@ -221,8 +243,8 @@ def answer(card_id):
     storage = get_storage(request)
     now_jst = get_jst_now()
     
-    user_answer = str(request.form.get('user_answer', '')).strip().replace('\r', '').replace('\n', '')
-    correct_answer = str(card['back']).strip().replace('\r', '').replace('\n', '')
+    user_answer = str(request.form.get('user_answer', '')).strip()
+    correct_answer = str(card['back']).strip()
     
     is_correct = (user_answer == correct_answer)
     
@@ -247,11 +269,11 @@ def answer(card_id):
     idx = session['total_in_session'] - len(session['quiz_queue'])
     progress = int((idx/session['total_in_session'])*100)
     
-    # 解説画面用に今回の結果を一時保存（correct_answerを渡すように追加）
+    # 解説画面用に今回の結果を一時保存
     session['last_result'] = {
         'card': card,
         'is_correct': is_correct,
-        'correct_answer': correct_answer, 
+        'correct_answer': correct_answer,
         'current': idx,
         'progress': progress
     }
@@ -265,7 +287,6 @@ def answer(card_id):
 
 @app.route('/next_question')
 def next_question():
-    """解説画面から次の問題へ遷移するためのフラグ除去用"""
     session.pop('last_result', None)
     session.modified = True
     return redirect(url_for('study'))
@@ -279,7 +300,6 @@ def show_result():
 
 @app.route('/home')
 def go_home():
-    """中断してホームへ戻る際は全ての学習中データを破棄"""
     session.pop('quiz_queue', None)
     session.pop('last_result', None)
     session.pop('total_in_session', None)
