@@ -20,30 +20,15 @@
         .choice-btn:hover { border-color: var(--primary-color); background-color: #f8faff; transform: translateY(-2px); }
         
         .ox-container { display: flex; gap: 25px; margin-top: 10px; }
-        .ox-btn { 
-            flex: 1; 
-            height: 160px; 
-            font-size: 5.5rem; 
-            border-radius: 24px; 
-            border: 3px solid #e5e7eb; 
-            background: white; 
-            transition: all 0.2s; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.05);
-        }
+        .ox-btn { flex: 1; height: 160px; font-size: 5.5rem; border-radius: 24px; border: 3px solid #e5e7eb; background: white; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 12px rgba(0,0,0,0.05); }
         .ox-btn-o { color: var(--correct-color); }
         .ox-btn-o:hover { border-color: var(--correct-color); background-color: #ecfdf5; transform: scale(1.03); }
         .ox-btn-x { color: var(--wrong-color); }
         .ox-btn-x:hover { border-color: var(--wrong-color); background-color: #fef2f2; transform: scale(1.03); }
 
-        .explanation-box { margin-top: 30px; padding: 25px; border-radius: 18px; display: none; border-left: 8px solid; }
-        .explanation-box.show { display: block; animation: slideIn 0.3s ease-out; }
+        .explanation-box { margin-top: 30px; padding: 25px; border-radius: 18px; border-left: 8px solid; }
         .res-correct { background-color: #ecfdf5; border-color: #10b981; color: #065f46; }
         .res-wrong { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; }
-        
-        @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         
         .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); }
         .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
@@ -55,7 +40,7 @@
 <div class="study-container">
     <div class="card">
         <div class="progress">
-            <div class="progress-bar" role="progressbar" style="width: {{ progress }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-bar" role="progressbar" style="width: {{ progress }}%;"></div>
         </div>
 
         <div class="card-body">
@@ -64,18 +49,14 @@
                 <span class="badge bg-light text-dark border px-3 py-2">問題 {{ current }} / {{ total }}</span>
             </div>
 
-            <div class="question-text">
-                {{ display_q }}
-            </div>
+            <div class="question-text">{{ display_q }}</div>
 
             {% if not is_answered %}
-                <form action="/answer/{{ card.id }}" method="POST" id="answerForm">
+                <form action="/answer/{{ card.id }}" method="POST">
                     {% if mode == 'fill' %}
                         <div class="choices-list">
                             {% for choice in choices %}
-                                <button type="submit" name="user_answer" value="{{ choice }}" class="choice-btn">
-                                    {{ choice }}
-                                </button>
+                                <button type="submit" name="user_answer" value="{{ choice|trim }}" class="choice-btn">{{ choice }}</button>
                             {% endfor %}
                         </div>
                     {% else %}
@@ -83,23 +64,21 @@
                             <button type="submit" name="user_answer" value="正解" class="ox-btn ox-btn-o">○</button>
                             <button type="submit" name="user_answer" value="不正解" class="ox-btn ox-btn-x">×</button>
                         </div>
-                        <p class="text-center text-muted mt-4">記述が正しいなら「○」、誤りなら「×」を選択してください</p>
                     {% endif %}
                 </form>
             {% else %}
-                <div class="explanation-box show {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
+                <div class="explanation-box {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
                     <div class="d-flex align-items-center mb-3">
                         <div style="font-size: 2.8rem; margin-right: 20px;">
                             {% if is_correct %}⭕{% else %}❌{% endif %}
                         </div>
                         <div>
                             <h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% else %}不正解です{% endif %}</h3>
-                            <p class="mb-0 small opacity-75">{% if is_correct %}お見事！その調子です。{% else %}次は頑張りましょう。{% endif %}</p>
                         </div>
                     </div>
                     <hr style="border-top: 2px solid rgba(0,0,0,0.1);">
                     <div class="explanation-content">
-                        <div class="fw-bold mb-2" style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">【 解説 】</div>
+                        <div class="fw-bold mb-2">【 解説 】</div>
                         <p class="mb-0" style="font-size: 1.15rem; line-height: 1.6; white-space: pre-wrap;">{{ card.note }}</p>
                     </div>
                 </div>
@@ -114,24 +93,9 @@
     </div>
     
     <div class="text-center">
-        <a href="/home" class="home-link">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-house-door-fill me-1" viewBox="0 0 16 16">
-                <path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5"/>
-            </svg>
-            学習を中断してホームへ戻る
-        </a>
+        <a href="/home" class="home-link">学習を中断してホームへ戻る</a>
     </div>
 </div>
-
-<script>
-    document.getElementById('answerForm')?.addEventListener('submit', function() {
-        const buttons = this.querySelectorAll('button');
-        buttons.forEach(btn => {
-            btn.disabled = true;
-            btn.style.opacity = '0.7';
-        });
-    });
-</script>
 
 </body>
 </html>

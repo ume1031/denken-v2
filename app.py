@@ -48,8 +48,8 @@ TARGET_CATEGORIES = [
 
 def load_csv_data(mode):
     """
-    指定されたモード (ox または fill) に応じてCSVファイルを再帰的にスキャンして読み込む。
-    判定ミスを防ぐため、back（正解ラベル）の読み込み時にstrip()を二重に適用。
+    指定されたモード (ox または fill) に応じてCSVファイルを読み込む。
+    【重要】読み込み時にすべての要素に対して .strip() を適用し、改行コード(\r, \n)を除去。
     """
     folder_mode = 'taku4' if mode == 'fill' else 'normal'
     search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
@@ -57,7 +57,6 @@ def load_csv_data(mode):
     
     questions = []
     if not files:
-        print(f"Warning: No files found in {search_path}")
         return []
 
     for f_path in files:
@@ -66,21 +65,21 @@ def load_csv_data(mode):
                 reader = csv.reader(f)
                 for i, row in enumerate(reader):
                     if len(row) >= 3:
+                        # 全要素から空白と改行を除去
+                        cleaned_row = [str(cell).strip().replace('\r', '').replace('\n', '') for cell in row]
+                        
                         dummies = []
                         if mode == 'fill':
-                            # 4択(taku4)のCSV列構成: ジャンル, 問題, 正解, 解説, 択1, 択2, 択3
-                            raw_dummies = row[4:7] if len(row) >= 7 else []
-                            dummies = [d.strip() for d in raw_dummies if d.strip()]
-
-                        # back(正解ラベル)の空白・改行を完全に除去
-                        correct_val = str(row[2]).strip().replace('\r', '').replace('\n', '')
+                            # 4択(taku4)のダミー選択肢 (択1, 択2, 択3) を取得
+                            raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 7 else []
+                            dummies = [d for d in raw_dummies if d]
 
                         questions.append({
                             'id': f"{mode}_{os.path.basename(f_path)}_{i}", 
-                            'category': row[0].strip(), 
-                            'front': row[1].strip(), 
-                            'back': correct_val, 
-                            'note': row[3].strip() if len(row) > 3 else "解説はありません。",
+                            'category': cleaned_row[0], 
+                            'front': cleaned_row[1], 
+                            'back': cleaned_row[2], # ここが正解
+                            'note': cleaned_row[3] if len(cleaned_row) > 3 else "解説はありません。",
                             'dummies': dummies
                         })
         except Exception as e:
@@ -96,7 +95,6 @@ def index():
     selected_cat = request.args.get('chart_cat', 'すべて')
     logs = storage.get('logs', [])
     
-    # グラフ用データの生成 (直近7日間)
     chart_labels, chart_values = [], []
     for i in range(6, -1, -1):
         d_str = (now_jst - timedelta(days=i)).strftime('%m/%d')
@@ -128,7 +126,6 @@ def start_study():
     
     if is_review:
         wrong_ids = storage.get('wrong_list', [])
-        # 復習時は全モードのCSVからIDが一致するものを探す
         all_q = load_csv_data('fill') + load_csv_data('ox')
         all_q = [q for q in all_q if q['id'] in wrong_ids]
     else:
@@ -159,10 +156,12 @@ def study():
     choices = []
     
     if current_mode == 'fill':
+        # 正解を穴埋め表示に置換
         if card['back'] in card['front']:
             display_q = card['front'].replace(card['back'], " 【 ？ 】 ")
         
-        choices = [card['back']] + card.get('dummies', [])
+        # 選択肢を洗浄した上でシャッフル
+        choices = [str(card['back']).strip()] + [str(d).strip() for d in card.get('dummies', [])]
         while len(choices) < 4:
             choices.append("---")
         random.shuffle(choices)
@@ -189,24 +188,21 @@ def answer(card_id):
     storage = get_storage(request)
     now_jst = get_jst_now()
     
-    # 送信値と正解値の「完全一致」を保証するための前処理
+    # ユーザー回答と正解を完全に洗浄して比較
     user_answer = str(request.form.get('user_answer', '')).strip().replace('\r', '').replace('\n', '')
     correct_answer = str(card['back']).strip().replace('\r', '').replace('\n', '')
     
-    # 判定
     is_correct = (user_answer == correct_answer)
     
     if is_correct:
         session['correct_count'] += 1
-        # 正解したら苦手リストから削除
         if card_id in storage['wrong_list']:
             storage['wrong_list'].remove(card_id)
     else:
-        # 不正解なら苦手リストに追加
         if card_id not in storage['wrong_list']:
             storage['wrong_list'].append(card_id)
     
-    # 学習ログの記録
+    # ログ記録
     storage['logs'].append({
         'date': now_jst.strftime('%m/%d'), 
         'cat': card['category'], 
@@ -220,7 +216,7 @@ def answer(card_id):
     idx = session['total_in_session'] - len(session['quiz_queue'])
     progress = int((idx/session['total_in_session'])*100)
     
-    # Cookieの更新
+    # Cookieとレスポンスを返す
     resp = make_response(render_template('study.html', 
                                          card=card, 
                                          display_q=card['front'], 
