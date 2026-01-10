@@ -41,22 +41,29 @@ def get_storage(request):
         
     return storage
 
-# 分野の再定義
-THEORY_CAT = ["理論"]
-MACHINE_CATS = [
-    "直流機", "誘導機", "同期機", "変圧器", 
-    "四機総合問題", "電動機応用", "電気機器", "パワーエレクトロニクス", 
-    "自動制御", "照明", "電熱", "電気化学", "メカトロニクス", "情報伝送及び処理"
+# 機械科目の配下にある詳細な14分野の定義
+MACHINE_SUB_CATS = [
+    "直流機", "誘導機", "同期機", "変圧器", "四機総合問題", "電動機応用", 
+    "電気機器", "パワーエレクトロニクス", "自動制御", "照明", "電熱", 
+    "電気化学", "メカトロニクス", "情報伝送及び処理"
 ]
-TARGET_CATEGORIES = THEORY_CAT + MACHINE_CATS
 
-def load_csv_data(mode):
+# インデックス表示やフィルタリングに使用する全ターゲットカテゴリ
+TARGET_CATEGORIES = ["理論", "機械"] + MACHINE_SUB_CATS
+
+def load_csv_data(mode, target_dir=None):
     """
-    CSVファイルを読み込む。IDを「カテゴリ_行番号」の形に固定し、
-    ファイル名に依存しすぎないようにしてCookieの肥大化を防ぐ。
+    CSVファイルを読み込む。
+    target_dir (riron または kikai) が指定された場合、そのフォルダ内のみをスキャンする。
     """
     folder_mode = 'taku4' if mode == 'fill' else 'normal'
-    search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
+    
+    # フォルダ構造に基づいた検索パスの構築
+    if target_dir:
+        search_path = os.path.join(CSV_BASE_DIR, folder_mode, target_dir, "*.csv")
+    else:
+        search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
+        
     files = glob.glob(search_path, recursive=True)
     
     questions = []
@@ -75,9 +82,9 @@ def load_csv_data(mode):
 
                         dummies = []
                         if mode == 'fill':
-                            # 改良：正解と解説以外の列（5列目以降）からダミーを抽出
-                            raw_candidates = cleaned_row[4:] 
-                            dummies = [d for d in raw_candidates if d and d != cleaned_row[2]]
+                            # ダミー選択肢を5列目から7列目まで柔軟に取得
+                            raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 5 else []
+                            dummies = [d for d in raw_dummies if d and d != cleaned_row[2]]
 
                         questions.append({
                             'id': q_id, 
@@ -97,9 +104,7 @@ def index():
     storage = get_storage(request)
     wrong_count = len(storage.get('wrong_list', []))
     now_jst = get_jst_now()
-    
-    # グラフ表示用のフィルタリング
-    selected_group = request.args.get('chart_cat', 'すべて')
+    selected_cat = request.args.get('chart_cat', 'すべて')
     logs = storage.get('logs', [])
     
     chart_labels, chart_values = [], []
@@ -107,33 +112,27 @@ def index():
         d_str = (now_jst - timedelta(days=i)).strftime('%m/%d')
         chart_labels.append(d_str)
         
-        # 修正：グラフの値を「正答率」ではなく「解答数（問題数）」として集計
-        day_logs = []
-        for l in logs:
-            if l.get('date') == d_str:
-                cat = l.get('cat')
-                if selected_group == 'すべて':
-                    day_logs.append(l)
-                elif selected_group == '理論' and cat in THEORY_CAT:
-                    day_logs.append(l)
-                elif selected_group == '機械' and cat in MACHINE_CATS:
-                    day_logs.append(l)
+        # グラフ集計ロジック: 「機械」が選ばれた場合は配下の14分野すべてを合計する
+        if selected_cat == '機械':
+            day_logs = [l for l in logs if l.get('date') == d_str and l.get('cat') in MACHINE_SUB_CATS]
+        else:
+            day_logs = [l for l in logs if l.get('date') == d_str and (selected_cat == 'すべて' or l.get('cat') == selected_cat)]
+        
         chart_values.append(len(day_logs))
             
     days_left = max(0, (datetime(2026, 3, 22, tzinfo=JST) - now_jst).days)
     
     return render_template('index.html', 
-                           theory_cats=THEORY_CAT,
-                           machine_cats=MACHINE_CATS,
+                           categories=TARGET_CATEGORIES, 
                            days_left=days_left, 
                            wrong_count=wrong_count, 
                            labels=chart_labels, 
                            values=chart_values, 
-                           selected_cat=selected_group)
+                           selected_cat=selected_cat)
 
 @app.route('/start_study', methods=['POST'])
 def start_study():
-    # 学習開始時にセッションを初期化
+    # 新しい学習を始める際、前回のセッション残骸を完全にクリア
     session.pop('quiz_queue', None)
     session.pop('last_result', None)
     session.pop('total_in_session', None)
@@ -141,13 +140,7 @@ def start_study():
 
     mode = request.form.get('mode', 'fill')
     cat = request.form.get('cat', 'すべて')
-    
-    # 修正：q_countが確実に数値として取得されるようにし、挙動不審を解消
-    try:
-        q_count = int(request.form.get('q_count', 10))
-    except (TypeError, ValueError):
-        q_count = 10
-        
+    q_count = int(request.form.get('q_count', 10))
     is_review = (request.form.get('review') == 'true')
     
     storage = get_storage(request)
@@ -157,20 +150,25 @@ def start_study():
         all_q = load_csv_data('fill') + load_csv_data('ox')
         all_q = [q for q in all_q if q['id'] in wrong_ids]
     else:
-        all_q = load_csv_data(mode)
+        # ディレクトリに基づいた読み込み分け
+        if cat == '理論':
+            all_q = load_csv_data(mode, target_dir='riron')
+        elif cat == '機械' or cat in MACHINE_SUB_CATS:
+            all_q = load_csv_data(mode, target_dir='kikai')
+        else:
+            all_q = load_csv_data(mode)
     
-    # カテゴリフィルタリング（理論/機械の親カテゴリ対応）
+    # 読み込んだデータから詳細にフィルタリング
     if cat == '理論':
-        all_q = [q for q in all_q if q['category'] in THEORY_CAT]
+        all_q = [q for q in all_q if q['category'] == '理論']
     elif cat == '機械':
-        all_q = [q for q in all_q if q['category'] in MACHINE_CATS]
+        all_q = [q for q in all_q if q['category'] in MACHINE_SUB_CATS]
     elif cat != 'すべて':
         all_q = [q for q in all_q if q['category'] == cat]
 
     if not all_q:
         return redirect(url_for('index'))
 
-    # 指定された問題数でランダムサンプリング
     selected_qs = random.sample(all_q, min(len(all_q), q_count))
     session['quiz_queue'] = selected_qs
     session['total_in_session'] = len(selected_qs)
@@ -180,11 +178,14 @@ def start_study():
 
 @app.route('/study')
 def study():
+    # PRGパターン: 回答結果（解説画面）を表示すべきかチェック
     last_result = session.get('last_result')
     
+    # 全ての問題が終了し、かつ表示する結果もない場合はリザルト画面へ
     if not last_result and not session.get('quiz_queue'):
-        # 修正：リザルト画面への遷移を確実に
-        return redirect(url_for('show_result'))
+        if session.get('total_in_session'):
+            return redirect(url_for('show_result'))
+        return redirect(url_for('index'))
 
     # --- 解説画面の表示 ---
     if last_result:
@@ -202,9 +203,6 @@ def study():
                                progress=last_result['progress'])
 
     # --- 問題画面の表示 ---
-    if not session.get('quiz_queue'):
-        return redirect(url_for('show_result'))
-        
     card = session['quiz_queue'][0]
     current_mode = 'fill' if card['id'].startswith('f_') else 'ox'
     
@@ -215,10 +213,13 @@ def study():
         if card['back'] in card['front']:
             display_q = card['front'].replace(card['back'], " 【 ？ 】 ")
         
+        # 選択肢の生成
         correct_answer = str(card['back']).strip()
         choices = [correct_answer] + [str(d).strip() for d in card.get('dummies', [])]
+        
+        # iOS対策: ダミーを補填
         while len(choices) < 4:
-            choices.append(f"選択肢{len(choices)+1}")
+            choices.append(f"ダミー選択肢_{len(choices)}")
         random.shuffle(choices)
 
     idx = session['total_in_session'] - len(session['quiz_queue']) + 1
@@ -243,8 +244,8 @@ def answer(card_id):
     storage = get_storage(request)
     now_jst = get_jst_now()
     
-    user_answer = str(request.form.get('user_answer', '')).strip()
-    correct_answer = str(card['back']).strip()
+    user_answer = str(request.form.get('user_answer', '')).strip().replace('\r', '').replace('\n', '')
+    correct_answer = str(card['back']).strip().replace('\r', '').replace('\n', '')
     
     is_correct = (user_answer == correct_answer)
     
@@ -262,7 +263,7 @@ def answer(card_id):
         'cat': card['category'], 
         'correct': is_correct
     })
-    storage['logs'] = storage['logs'][-200:]
+    storage['logs'] = storage['logs'][-500:] # ログ保存数を少し拡張
     
     # セッション更新
     session['quiz_queue'].pop(0)
@@ -273,7 +274,7 @@ def answer(card_id):
     session['last_result'] = {
         'card': card,
         'is_correct': is_correct,
-        'correct_answer': correct_answer,
+        'correct_answer': correct_answer, 
         'current': idx,
         'progress': progress
     }
