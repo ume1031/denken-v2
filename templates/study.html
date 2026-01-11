@@ -7,81 +7,68 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         :root { --primary-color: #2563eb; --correct-color: #10b981; --wrong-color: #ef4444; }
-        
-        /* iOS フォント描画バグ対策 */
-        body { 
-            background-color: #f3f4f6; 
-            /* 標準的なフォントを優先。iOS Safariでの描画バグを防ぐ */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            -webkit-text-size-adjust: 100%; 
-            -webkit-font-smoothing: antialiased;
-        }
+        body { background-color: #f3f4f6; font-family: 'Helvetica Neue', Arial, sans-serif; -webkit-text-size-adjust: 100%; }
         
         button { -webkit-appearance: none; appearance: none; border-radius: 14px; }
 
         .study-container { max-width: 700px; margin: 40px auto; padding: 0 15px; }
-        .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; background-color: #ffffff; position: relative; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; background-color: #ffffff; }
         .progress { height: 8px; border-radius: 0; background-color: #e5e7eb; }
         .progress-bar { background-color: var(--primary-color); transition: width 0.4s ease; }
-
         .card-body { padding: 30px; }
-        .category-badge { display: inline-block; padding: 6px 14px; background: #dbeafe; color: var(--primary-color); border-radius: 20px; font-size: 0.85rem; font-weight: 700; margin-bottom: 20px; }
-        .question-text { font-size: 1.35rem; line-height: 1.6; color: #1f2937; margin-bottom: 30px; min-height: 100px; font-weight: 600; }
-
-        /* 4択ボタン：iOSの文字消え対策 */
-        .choices-list { display: flex; flex-direction: column; gap: 12px; }
+        .category-badge { display: inline-block; padding: 4px 12px; background: #dbeafe; color: var(--primary-color); border-radius: 20px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; }
+        .question-text { font-size: 1.35rem; line-height: 1.7; color: #1f2937; margin-bottom: 30px; min-height: 120px; font-weight: 500; }
+        
         .choice-btn { 
-            width: 100%; padding: 20px; text-align: left; 
-            border: 2px solid #e5e7eb; border-radius: 16px; 
-            background-color: #ffffff !important; 
-            color: #1f2937 !important; 
-            font-weight: 600; font-size: 1.1rem; 
-            transition: all 0.2s;
-            position: relative;
-            z-index: 1; /* 重なり順を固定 */
-            line-height: 1.4;
-            word-wrap: break-word;
-            display: block;
+            display: block; width: 100%; padding: 18px; margin-bottom: 15px; text-align: left; 
+            border: 2px solid #e5e7eb; border-radius: 14px; background-color: #ffffff !important; 
+            color: #1f2937 !important; transition: all 0.2s; font-weight: 600; font-size: 1.05rem; cursor: pointer;
         }
-        .choice-btn:active { background-color: #f0f7ff !important; border-color: var(--primary-color); transform: scale(0.98); }
+        .choice-btn:hover, .choice-btn:active { border-color: var(--primary-color); background-color: #f8faff !important; }
 
-        .ox-container { display: flex; gap: 15px; }
-        .ox-btn { flex: 1; height: 150px; font-size: 4rem; border-radius: 20px; border: 3px solid #e5e7eb; background: white !important; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .ox-container { display: flex; gap: 20px; margin-top: 10px; }
+        .ox-btn { 
+            flex: 1; height: 140px; font-size: 4.5rem; border-radius: 24px; border: 3px solid #e5e7eb; 
+            background: white !important; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 12px rgba(0,0,0,0.05);
+        }
         .ox-btn-o { color: var(--correct-color) !important; }
         .ox-btn-x { color: var(--wrong-color) !important; }
-        .ox-btn:active { transform: scale(0.95); }
 
-        .explanation-box { margin-top: 25px; padding: 25px; border-radius: 18px; border-left: 10px solid; }
+        .explanation-box { margin-top: 30px; padding: 25px; border-radius: 18px; border-left: 8px solid; }
         .res-correct { background-color: #ecfdf5; border-color: #10b981; color: #065f46; }
         .res-wrong { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; }
+        
+        .correct-reveal { background: #ffffff; border: 2px solid var(--correct-color); border-radius: 12px; padding: 15px; margin-bottom: 20px; color: #1f2937; }
+        .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); text-decoration: none; display: inline-block; }
+        .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
 
-        .btn-next { padding: 18px 40px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; }
-        .combo-badge { position: absolute; top: 15px; right: 20px; font-size: 2rem; font-weight: 900; color: #f59e0b; display: none; z-index: 5; animation: pop 0.4s; }
-        @keyframes pop { 0% { transform: scale(0.5); } 100% { transform: scale(1); } }
+        /* コンボ表示用 */
+        .combo-text { font-size: 1.2rem; font-weight: 800; color: #f59e0b; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .combo-active { animation: bounce 0.5s ease; }
+        @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
     </style>
 </head>
-<body onclick="unlockAudio()">
+<body>
 
 <div class="study-container">
     <div class="card">
-        <div id="comboDisplay" class="combo-badge">0 COMBO</div>
         <div class="progress"><div class="progress-bar" role="progressbar" style="width: {{ progress }}%;"></div></div>
         <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <span class="category-badge">{{ card.category }}</span>
-                <span class="badge bg-light text-dark border rounded-pill">問 {{ current }} / {{ total }}</span>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <span class="category-badge">{{ card.category }}</span>
+                    {% if combo > 1 %}<span class="combo-text ms-2 combo-active">{{ combo }} COMBO!</span>{% endif %}
+                </div>
+                <span class="badge bg-light text-dark border px-3 py-2">問題 {{ current }} / {{ total }}</span>
             </div>
-
             <div class="question-text">{{ display_q }}</div>
 
             {% if not is_answered %}
-                <form action="/answer/{{ card.id }}" method="POST" id="quizForm">
+                <form action="/answer/{{ card.id }}" method="POST">
                     {% if mode == 'fill' %}
                         <div class="choices-list">
                             {% for choice in choices %}
-                                <button type="submit" name="user_answer" value="{{ choice|trim }}" class="choice-btn">
-                                    {{ choice }}
-                                </button>
+                                <button type="submit" name="user_answer" value="{{ choice|trim }}" class="choice-btn">{{ choice }}</button>
                             {% endfor %}
                         </div>
                     {% else %}
@@ -95,95 +82,72 @@
                 <div class="explanation-box {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
                     <div class="d-flex align-items-center mb-3">
                         <div style="font-size: 2.8rem; margin-right: 20px;">{% if is_correct %}⭕{% else %}❌{% endif %}</div>
-                        <div><h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% else %}不正解です{% endif %}</h3></div>
+                        <div><h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% endif %}{% if not is_correct %}不正解です{% endif %}</h3></div>
                     </div>
                     {% if not is_correct and mode == 'fill' %}
-                        <div class="p-2 bg-white rounded border border-danger mb-3">
-                            <span class="text-danger fw-bold small">正解の答え:</span>
-                            <div class="fs-5 fw-bold">{{ correct_answer }}</div>
-                        </div>
+                    <div class="correct-reveal">
+                        <span class="badge bg-success mb-2" style="color:white;">正解の選択肢</span>
+                        <div class="fs-4 fw-bold text-success">{{ correct_answer }}</div>
+                    </div>
                     {% endif %}
-                    <hr>
-                    <div class="fw-bold mb-2">【 解説 】</div>
-                    <p class="mb-0" style="white-space: pre-wrap;">{{ card.note }}</p>
+                    <hr style="border-top: 2px solid rgba(0,0,0,0.1);">
+                    <div class="explanation-content">
+                        <div class="fw-bold mb-2">【 解説 】</div>
+                        <p class="mb-0" style="font-size: 1.15rem; line-height: 1.6; white-space: pre-wrap;">{{ card.note }}</p>
+                    </div>
                 </div>
-                <div class="text-center mt-4">
-                    <a href="/next_question" class="btn btn-primary btn-next shadow">
-                        {% if current == total %}結果を見る{% else %}次の問題へ{% endif %}
+                <div class="text-center mt-5">
+                    <a href="/next_question" class="btn btn-primary btn-next">
+                        {% if current == total %}終了する{% else %}次へ進む{% endif %}
                     </a>
                 </div>
             {% endif %}
         </div>
     </div>
+    <div class="text-center"><a href="/home" class="home-link">ホームへ戻る</a></div>
 </div>
 
 <script>
-    // ==========================================
-    // 音声演出ロジック (Audio Context)
-    // ==========================================
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    let audioCtx = null;
-
-    function unlockAudio() {
-        if (!audioCtx) audioCtx = new AudioCtx();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-    }
-
-    // 正解音 (コンボ数に応じて音階が上がる)
-    function playRichTone(freq) {
-        unlockAudio();
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(now + 0.4);
-    }
-
-    // 不正解音 (ブザー音)
-    function playWrongTone() {
-        unlockAudio();
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(120, now);
-        osc.frequency.linearRampToValueAtTime(80, now + 0.3);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.linearRampToValueAtTime(0.001, now + 0.3);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(now + 0.3);
-    }
-
-    // ==========================================
-    // 画面初期化 & コンボ処理
-    // ==========================================
-    document.addEventListener('DOMContentLoaded', () => {
-        const isAnswered = "{{ is_answered }}" === "True";
-        const isCorrect = "{{ is_correct }}" === "True";
-        let combo = parseInt(localStorage.getItem('denken_combo') || '0');
-
-        if (isAnswered) {
-            if (isCorrect) {
-                combo++;
-                localStorage.setItem('denken_combo', combo);
-                // コンボ数に応じて周波数を算出
-                const freq = 440 * Math.pow(Math.pow(2, 1/12), combo + 2);
-                playRichTone(freq);
-                if (combo >= 2) {
-                    const el = document.getElementById('comboDisplay');
-                    el.innerText = combo + " COMBO!";
-                    el.style.display = 'block';
-                }
-            } else {
-                localStorage.setItem('denken_combo', '0');
-                playWrongTone();
-            }
+    // コンボ音源生成システム
+    function playComboSound(isCorrect, combo) {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!isCorrect) {
+            // 不正解時の低い音
+            playNote(audioCtx, 150, 'sawtooth', 0.3, 0.3);
+            return;
         }
-    });
+
+        // 正解時：コンボに応じて音階を上げる (和音構成)
+        const baseFreq = 440 * Math.pow(1.05946, combo); // 1コンボごとに半音以上上昇
+        const chords = [1, 1.25, 1.5, 1.875]; // メジャーセブンス和音の比率
+
+        chords.forEach((multiplier, index) => {
+            setTimeout(() => {
+                playNote(audioCtx, baseFreq * multiplier, 'sine', 0.1, 0.4 - (index * 0.05));
+            }, index * 40);
+        });
+    }
+
+    function playNote(ctx, freq, type, volume, duration) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    }
+
+    // 解答直後の音出し
+    {% if is_answered %}
+        window.addEventListener('load', () => {
+            playComboSound({{ 'true' if is_correct else 'false' }}, {{ combo }});
+        });
+    {% endif %}
 </script>
+
 </body>
 </html>
