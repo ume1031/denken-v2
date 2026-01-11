@@ -150,15 +150,12 @@ def start_study():
     mode = request.form.get('mode', 'fill')
     cat = request.form.get('cat', 'すべて')
     
-    # --- 【修正】テキストボックスから任意の問題数を取得するロジック ---
+    # --- 【修正】ラジオボタンから10問または20問を取得するロジック ---
     try:
-        # フォームから custom_q_count を取得、デフォルト10問
-        raw_count = request.form.get('custom_q_count', '10')
-        user_input_count = int(raw_count)
-        # 上限100問、下限1問の範囲に制限するバリデーション
-        q_count = max(1, min(100, user_input_count))
+        # フォームから q_count を取得、デフォルト10問
+        raw_count = request.form.get('q_count', '10')
+        q_count = int(raw_count)
     except (ValueError, TypeError):
-        # 入力が不正な場合は標準の10問に設定
         q_count = 10
     
     is_review = (request.form.get('review') == 'true')
@@ -184,7 +181,7 @@ def start_study():
     # ランダムにシャッフル
     random.shuffle(all_q)
     
-    # 指定された問題数分だけ抽出（スライス処理により問題数が少なくてもエラーにならない）
+    # 指定された問題数分だけ抽出
     selected_qs = all_q[:q_count]
     
     # セッションに保存

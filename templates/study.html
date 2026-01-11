@@ -12,7 +12,7 @@
         button { -webkit-appearance: none; appearance: none; border-radius: 14px; }
 
         .study-container { max-width: 700px; margin: 40px auto; padding: 0 15px; }
-        .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; background-color: #ffffff; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; background-color: #ffffff; position: relative; }
         .progress { height: 8px; border-radius: 0; background-color: #e5e7eb; }
         .progress-bar { background-color: var(--primary-color); transition: width 0.4s ease; }
         .card-body { padding: 30px; }
@@ -41,12 +41,21 @@
         .correct-reveal { background: #ffffff; border: 2px solid var(--correct-color); border-radius: 12px; padding: 15px; margin-bottom: 20px; color: #1f2937; }
         .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); text-decoration: none; display: inline-block; }
         .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
+
+        /* コンボ表示用 */
+        .combo-badge {
+            position: absolute; top: 15px; right: 25px; font-size: 2.5rem; font-weight: 900;
+            color: #f59e0b; text-shadow: 2px 2px 0px #fff; display: none; z-index: 10;
+            animation: combo-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes combo-pop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     </style>
 </head>
 <body>
 
 <div class="study-container">
     <div class="card">
+        <div id="comboDisplay" class="combo-badge">0 COMBO</div>
         <div class="progress"><div class="progress-bar" role="progressbar" style="width: {{ progress }}%;"></div></div>
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -89,7 +98,7 @@
                     </div>
                 </div>
                 <div class="text-center mt-5">
-                    <a href="/next_question" class="btn btn-primary btn-next">
+                    <a href="/next_question" class="btn btn-primary btn-next" id="btnNext">
                         {% if current == total %}終了する{% else %}次へ進む{% endif %}
                     </a>
                 </div>
@@ -98,5 +107,51 @@
     </div>
     <div class="text-center"><a href="/home" class="home-link">ホームへ戻る</a></div>
 </div>
+
+<script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function playTone(freq) {
+        if (!audioCtx) audioCtx = new AudioCtx();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const isAnswered = "{{ is_answered }}" === "True";
+        const isCorrect = "{{ is_correct }}" === "True";
+        let combo = parseInt(localStorage.getItem('denken_combo') || '0');
+
+        if (isAnswered) {
+            if (isCorrect) {
+                combo++;
+                localStorage.setItem('denken_combo', combo);
+                // 1正解ごとに音階アップ (A4 440Hz基準)
+                const freq = 440 * Math.pow(Math.pow(2, 1/12), combo);
+                playTone(freq);
+                if (combo >= 2) {
+                    const el = document.getElementById('comboDisplay');
+                    el.innerText = combo + " COMBO!";
+                    el.style.display = 'block';
+                }
+            } else {
+                localStorage.setItem('denken_combo', '0');
+            }
+        }
+
+        document.getElementById('btnNext')?.addEventListener('click', () => {
+            if ("{{ current }}" === "{{ total }}") localStorage.setItem('denken_combo', '0');
+        });
+    });
+</script>
 </body>
 </html>
