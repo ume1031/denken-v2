@@ -17,6 +17,8 @@
         .btn-study { background: linear-gradient(45deg, #00b09b, #96c93d); border: none; font-weight: bold; font-size: 1.5rem; color: white; padding: 15px; border-radius: 15px; width: 100%; transition: 0.3s; }
         .btn-study:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
         .stats-badge { background: rgba(255,255,255,0.1); border-radius: 15px; padding: 10px 20px; border: 1px solid rgba(255,255,255,0.2); }
+        /* 数値入力用の追加スタイル */
+        .q-count-input { border-radius: 12px; border: 2px solid #ddd; padding: 10px; text-align: center; font-weight: bold; font-size: 1.2rem; width: 100%; color: #333; }
     </style>
 </head>
 <body>
@@ -59,10 +61,14 @@
                     </div>
 
                     <div class="row g-3 align-items-end mb-4">
-                        <div class="col-12 col-md-6">
-                            <button type="submit" class="btn btn-study shadow">学習開始 (10問)</button>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-bold text-muted">問題数 (1-100)</label>
+                            <input type="number" name="custom_q_count" value="10" min="1" max="100" class="q-count-input">
                         </div>
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-5">
+                            <button type="submit" class="btn btn-study shadow">学 習</button>
+                        </div>
+                        <div class="col-12 col-md-4">
                             <button type="submit" name="review" value="true" class="btn btn-warning btn-lg w-100 py-3 rounded-4 shadow fw-bold text-white {% if wrong_count == 0 %}disabled{% endif %}">
                                 復習 ({{ wrong_count }})
                             </button>

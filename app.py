@@ -150,8 +150,16 @@ def start_study():
     mode = request.form.get('mode', 'fill')
     cat = request.form.get('cat', 'すべて')
     
-    # 20問・30問の選択肢は削除。標準10問に固定。
-    q_count = 10
+    # --- 【修正】テキストボックスから任意の問題数を取得するロジック ---
+    try:
+        # フォームから custom_q_count を取得、デフォルト10問
+        raw_count = request.form.get('custom_q_count', '10')
+        user_input_count = int(raw_count)
+        # 上限100問、下限1問の範囲に制限するバリデーション
+        q_count = max(1, min(100, user_input_count))
+    except (ValueError, TypeError):
+        # 入力が不正な場合は標準の10問に設定
+        q_count = 10
     
     is_review = (request.form.get('review') == 'true')
     storage = get_storage(request)
