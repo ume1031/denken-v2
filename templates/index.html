@@ -108,9 +108,26 @@
                 scales: { 
                     y: { 
                         beginAtZero: true,
-                        ticks: { stepSize: 1 } 
+                        // 固定値を削除し、動的に最大値を設定
+                        ticks: { 
+                            stepSize: 1,
+                            precision: 0
+                        },
+                        title: {
+                            display: true,
+                            text: '回答数 (問)'
+                        }
                     } 
-                } 
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y + ' 問';
+                            }
+                        }
+                    }
+                }
             }
         });
     </script>
