@@ -184,6 +184,7 @@ def start_study():
     session['total_in_session'] = len(selected_qs)
     session['correct_count'] = 0
     session['combo'] = 0  # コンボ数初期化
+    session['is_review_mode'] = is_review  # 復習モードフラグを保存
     session.modified = True 
     
     return redirect(url_for('study'))
@@ -268,11 +269,14 @@ def answer(card_id):
     
     is_correct = (user_answer == correct_answer)
     
+    # 復習モードかどうかを判定
+    is_review_mode = session.get('is_review_mode', False)
+    
     if is_correct:
         session['correct_count'] += 1
         session['combo'] = session.get('combo', 0) + 1 # コンボ加算
-        # 正解したら復習リストから削除
-        if card_id in storage['wrong_list']:
+        # 復習モードで正解したら復習リストから削除
+        if is_review_mode and card_id in storage['wrong_list']:
             storage['wrong_list'] = [i for i in storage['wrong_list'] if i != card_id]
     else:
         session['combo'] = 0 # コンボリセット
