@@ -1,6 +1,6 @@
 import os, csv, random, json, time, glob
 import pandas as pd
-from flask import Flask, render_template, request, redirect, url_for, session, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, make_response, jsonify
 from datetime import datetime, timedelta, timezone
 
 app = Flask(__name__)
@@ -16,6 +16,10 @@ def get_jst_now():
 # CSVファイルを保存しているルートディレクトリの定義
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_BASE_DIR = os.path.join(BASE_DIR, "logic", "csv_data")
+
+# Claude API設定（環境変数から取得）
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+USE_AI_GRADING = bool(ANTHROPIC_API_KEY)  # APIキーがあればAI採点を有効化
 
 def get_storage(request):
     """
@@ -58,14 +62,25 @@ ALL_CATEGORIES = [
 def load_csv_data(mode):
     """
     CSVファイルを読み込む。
-    mode: 'fill' (穴埋め) または 'ox' (○×)
+    mode: 'fill' (穴埋め), 'ox' (○×), 'essay' (記述式)
     """
     # 穴埋め(fill)はtaku4フォルダ、○×(ox)はnormalフォルダを参照
-    folder_mode = 'taku4' if mode == 'fill' else 'normal'
+    # 記述式(essay)は新たにessayフォルダを参照（まだない場合は既存データを流用）
+    folder_mode = {
+        'fill': 'taku4',
+        'ox': 'normal',
+        'essay': 'essay'  # 新形式用
+    }.get(mode, 'normal')
     
     # 全フォルダを再帰的にスキャンしてCSVを取得
     search_path = os.path.join(CSV_BASE_DIR, folder_mode, "**", "*.csv")
     files = glob.glob(search_path, recursive=True)
+    
+    # essay形式のフォルダがない場合は既存データから流用
+    if mode == 'essay' and not files:
+        # 一旦normalフォルダから取得（記述式問題として扱う）
+        search_path = os.path.join(CSV_BASE_DIR, 'normal', "**", "*.csv")
+        files = glob.glob(search_path, recursive=True)
     
     questions = []
     for f_path in files:
@@ -89,6 +104,11 @@ def load_csv_data(mode):
                             raw_dummies = cleaned_row[4:7] if len(cleaned_row) >= 5 else []
                             # 空文字や正解と同じものは除外
                             dummies = [d for d in raw_dummies if d and d != cleaned_row[2]]
+                        
+                        # 記述式用のキーワードリスト（CSV 5列目以降）
+                        keywords = []
+                        if mode == 'essay' and len(cleaned_row) > 4:
+                            keywords = [kw.strip() for kw in cleaned_row[4:] if kw.strip()]
 
                         questions.append({
                             'id': q_id, 
@@ -96,13 +116,108 @@ def load_csv_data(mode):
                             'front': cleaned_row[1], 
                             'back': cleaned_row[2], 
                             'note': cleaned_row[3] if len(cleaned_row) > 3 else "解説はありません。",
-                            'dummies': dummies
+                            'dummies': dummies,
+                            'keywords': keywords  # 記述式用
                         })
         except Exception as e:
             # 読み込みエラーが発生しても全体を止めない
             print(f"CSV Read Error ({f_path}): {e}")
             
     return questions
+
+def evaluate_essay_with_ai(question, model_answer, user_answer, note=""):
+    """
+    Claude APIを使って記述式回答を評価
+    """
+    if not USE_AI_GRADING:
+        # APIキーがない場合は簡易評価
+        return evaluate_essay_simple(user_answer, model_answer)
+    
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        
+        prompt = f"""あなたは電験三種の試験採点者です。以下の問題に対する受験生の回答を評価してください。
+
+【問題】
+{question}
+
+【模範解答】
+{model_answer}
+
+{f"【解説】{note}" if note and note != "解説はありません。" else ""}
+
+【受験生の回答】
+{user_answer}
+
+以下の基準で評価し、JSON形式で返答してください:
+- 70点以上で合格
+- 主要なポイントをカバーしているか
+- 技術的に正確か
+- 説明が論理的か
+
+{{
+    "score": 0-100の整数,
+    "is_correct": true/false,
+    "feedback": "200文字以内の具体的なフィードバック",
+    "strengths": ["良い点1", "良い点2"],
+    "improvements": ["改善点1", "改善点2"]
+}}
+"""
+        
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        result_text = message.content[0].text
+        # JSONの抽出（マークダウンのコードブロックを除去）
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0]
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0]
+        
+        result = json.loads(result_text.strip())
+        return result
+        
+    except Exception as e:
+        print(f"AI Grading Error: {e}")
+        # エラー時は簡易評価にフォールバック
+        return evaluate_essay_simple(user_answer, model_answer)
+
+def evaluate_essay_simple(user_answer, model_answer, min_length=20):
+    """
+    簡易的な記述式評価（AI APIが使えない場合）
+    文字数と類似度で判定
+    """
+    if not user_answer or len(user_answer.strip()) < min_length:
+        return {
+            'score': 0,
+            'is_correct': False,
+            'feedback': f'回答が短すぎます。最低{min_length}文字以上で記述してください。',
+            'strengths': [],
+            'improvements': ['より詳しい説明が必要です']
+        }
+    
+    # 簡易的な類似度計算（共通文字数の割合）
+    user_set = set(user_answer.lower())
+    model_set = set(model_answer.lower())
+    
+    if len(model_set) == 0:
+        similarity = 0
+    else:
+        similarity = len(user_set & model_set) / len(model_set)
+    
+    score = int(similarity * 100)
+    
+    return {
+        'score': score,
+        'is_correct': score >= 60,
+        'feedback': f'文字数: {len(user_answer)}字。模範解答との類似度: {score}点。AI採点を有効にするとより詳細な評価が得られます。',
+        'strengths': ['回答を記述しました'] if len(user_answer) >= min_length else [],
+        'improvements': ['より詳しい説明を心がけましょう'] if score < 70 else []
+    }
 
 @app.route('/')
 def index():
@@ -140,7 +255,8 @@ def index():
                            labels=chart_labels, 
                            values=chart_values, 
                            selected_cat=selected_cat,
-                           chart_title=chart_title)
+                           chart_title=chart_title,
+                           ai_enabled=USE_AI_GRADING)
 
 @app.route('/start_study', methods=['POST'])
 def start_study():
@@ -160,7 +276,7 @@ def start_study():
     if is_review:
         wrong_ids = storage.get('wrong_list', [])
         # 復習時は全形式から間違えた問題を抽出
-        all_q = load_csv_data('fill') + load_csv_data('ox')
+        all_q = load_csv_data('fill') + load_csv_data('ox') + load_csv_data('essay')
         all_q = [q for q in all_q if q['id'] in wrong_ids]
     else:
         # 通常学習
@@ -203,7 +319,10 @@ def study():
     # --- 解説表示モード (回答直後の状態) ---
     if last_result:
         card = last_result['card']
-        current_mode = 'fill' if card['id'].startswith('f_') else 'ox'
+        current_mode = card['id'][0]
+        mode_map = {'f': 'fill', 'o': 'ox', 'e': 'essay'}
+        current_mode = mode_map.get(current_mode, 'fill')
+        
         return render_template('study.html', 
                                card=card, 
                                display_q=card['front'], 
@@ -214,11 +333,15 @@ def study():
                                current=last_result['current'], 
                                total=session['total_in_session'], 
                                progress=last_result['progress'],
-                               combo=session.get('combo', 0))
+                               combo=session.get('combo', 0),
+                               user_answer=last_result.get('user_answer', ''),
+                               ai_feedback=last_result.get('ai_feedback'))
 
     # --- 問題表示モード ---
     card = session['quiz_queue'][0]
-    current_mode = 'fill' if card['id'].startswith('f_') else 'ox'
+    current_mode = card['id'][0]
+    mode_map = {'f': 'fill', 'o': 'ox', 'e': 'essay'}
+    current_mode = mode_map.get(current_mode, 'fill')
     
     display_q = card['front']
     choices = []
@@ -226,7 +349,7 @@ def study():
     if current_mode == 'fill':
         # 穴埋め形式の場合、正解文字列を伏せ字に置換
         if card['back'] in card['front']:
-            display_q = card['front'].replace(card['back'], " 【 ？ 】 ")
+            display_q = card['front'].replace(card['back'], " 【 ? 】 ")
         
         # 選択肢の生成
         correct_answer = str(card['back']).strip()
@@ -263,11 +386,29 @@ def answer(card_id):
     storage = get_storage(request)
     now_jst = get_jst_now()
     
+    # 問題形式の判定
+    current_mode = card['id'][0]
+    mode_map = {'f': 'fill', 'o': 'ox', 'e': 'essay'}
+    current_mode = mode_map.get(current_mode, 'fill')
+    
     # 比較用に文字列を正規化
     user_answer = str(request.form.get('user_answer', '')).strip().replace('\r', '').replace('\n', '')
     correct_answer = str(card['back']).strip().replace('\r', '').replace('\n', '')
     
-    is_correct = (user_answer == correct_answer)
+    # 記述式の場合はAI評価
+    ai_feedback = None
+    if current_mode == 'essay':
+        evaluation = evaluate_essay_with_ai(
+            card['front'], 
+            card['back'], 
+            user_answer,
+            card.get('note', '')
+        )
+        is_correct = evaluation['is_correct']
+        ai_feedback = evaluation
+    else:
+        # 従来の選択式評価
+        is_correct = (user_answer == correct_answer)
     
     # 復習モードかどうかを判定
     is_review_mode = session.get('is_review_mode', False)
@@ -305,7 +446,9 @@ def answer(card_id):
         'is_correct': is_correct,
         'correct_answer': correct_answer, 
         'current': idx,
-        'progress': progress
+        'progress': progress,
+        'user_answer': user_answer,
+        'ai_feedback': ai_feedback
     }
     session.modified = True 
     

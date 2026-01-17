@@ -17,15 +17,34 @@
         .btn-study { background: linear-gradient(45deg, #00b09b, #96c93d); border: none; font-weight: bold; font-size: 1.5rem; color: white; padding: 15px; border-radius: 15px; width: 100%; transition: 0.3s; }
         .btn-study:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
         .stats-badge { background: rgba(255,255,255,0.1); border-radius: 15px; padding: 10px 20px; border: 1px solid rgba(255,255,255,0.2); }
+        .ai-status-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-status-badge.disabled {
+            background: #6b7280;
+        }
     </style>
 </head>
 <body>
     <div class="container py-5">
         <div class="text-center mb-5">
             <h1 class="display-3 fw-bold">電 験</h1>
-            <div class="d-flex justify-content-center gap-3 mt-3">
+            <div class="d-flex justify-content-center gap-3 mt-3 flex-wrap">
                 <div class="stats-badge">📅 試験まで {{ days_left }} 日</div>
                 <div class="stats-badge text-warning">🔄 復習待ち {{ wrong_count }} 問</div>
+                {% if ai_enabled %}
+                <div class="ai-status-badge">🤖 AI採点: 有効</div>
+                {% else %}
+                <div class="ai-status-badge disabled">🤖 AI採点: 無効</div>
+                {% endif %}
             </div>
         </div>
 
@@ -33,20 +52,25 @@
             <div class="card-body p-4 p-md-5">
                 <form action="/start_study" method="POST">
                     <div class="row mb-4">
-                        <div class="col-6">
+                        <div class="col-md-4 mb-3 mb-md-0">
                             <label class="form-label fw-bold text-muted">解答形式</label>
-                            <div class="row g-2">
-                                <div class="col-6">
-                                    <input type="radio" class="btn-check" name="mode" id="m1" value="fill" checked>
-                                    <label class="btn btn-outline-dark w-100 py-3 rounded-4" for="m1">4択</label>
-                                </div>
-                                <div class="col-6">
-                                    <input type="radio" class="btn-check" name="mode" id="m2" value="ox">
-                                    <label class="btn btn-outline-dark w-100 py-3 rounded-4" for="m2">○×</label>
-                                </div>
+                            <div class="d-grid gap-2">
+                                <input type="radio" class="btn-check" name="mode" id="m1" value="fill" checked>
+                                <label class="btn btn-outline-dark py-3 rounded-4" for="m1">4択</label>
+                                
+                                <input type="radio" class="btn-check" name="mode" id="m2" value="ox">
+                                <label class="btn btn-outline-dark py-3 rounded-4" for="m2">○×</label>
+                                
+                                <input type="radio" class="btn-check" name="mode" id="m3" value="essay">
+                                <label class="btn btn-outline-dark py-3 rounded-4" for="m3">
+                                    記述式
+                                    {% if ai_enabled %}
+                                    <span class="badge bg-success ms-1">AI</span>
+                                    {% endif %}
+                                </label>
                             </div>
                         </div>
-                        <div class="col-6">
+                        <div class="col-md-4 mb-3 mb-md-0">
                             <label class="form-label fw-bold text-muted">問題数</label>
                             <div class="row g-2">
                                 <div class="col-6">
@@ -84,6 +108,12 @@
                         </div>
                     </div>
                 </form>
+
+                {% if not ai_enabled %}
+                <div class="alert alert-info">
+                    <strong>💡 ヒント:</strong> 環境変数に <code>ANTHROPIC_API_KEY</code> を設定すると、記述式問題でAI自動採点が有効になります。
+                </div>
+                {% endif %}
 
                 <hr class="my-5">
                 
@@ -123,7 +153,6 @@
                 scales: { 
                     y: { 
                         beginAtZero: true,
-                        // 固定値を削除し、動的に最大値を設定
                         ticks: { 
                             stepSize: 1,
                             precision: 0

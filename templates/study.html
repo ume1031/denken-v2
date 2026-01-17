@@ -34,11 +34,117 @@
         .ox-btn-o { color: var(--correct-color) !important; }
         .ox-btn-x { color: var(--wrong-color) !important; }
 
+        /* 記述式用スタイル */
+        .essay-textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 14px;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            resize: vertical;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .essay-textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .char-counter {
+            text-align: right;
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            margin-bottom: 15px;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+        }
+        .submit-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .explanation-box { margin-top: 30px; padding: 25px; border-radius: 18px; border-left: 8px solid; }
         .res-correct { background-color: #ecfdf5; border-color: #10b981; color: #065f46; }
         .res-wrong { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; }
         
         .correct-reveal { background: #ffffff; border: 2px solid var(--correct-color); border-radius: 12px; padding: 15px; margin-bottom: 20px; color: #1f2937; }
+        
+        /* AI評価フィードバック */
+        .ai-feedback-box {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px solid #0ea5e9;
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .ai-score {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #0369a1;
+            margin-bottom: 10px;
+        }
+        .ai-feedback-section {
+            margin-top: 15px;
+        }
+        .ai-feedback-section h6 {
+            font-weight: 700;
+            color: #0c4a6e;
+            margin-bottom: 8px;
+        }
+        .ai-feedback-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .ai-feedback-section li::before {
+            content: "✓ ";
+            color: #10b981;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        .ai-feedback-section.improvements li::before {
+            content: "→ ";
+            color: #f59e0b;
+        }
+        
+        .user-answer-display {
+            background: #f9fafb;
+            border: 2px solid #d1d5db;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        .user-answer-display .label {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #6b7280;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .user-answer-display .content {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: #1f2937;
+            white-space: pre-wrap;
+        }
+        
         .btn-next { padding: 16px 45px; border-radius: 14px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2); text-decoration: none; display: inline-block; }
         .home-link { display: inline-block; margin-top: 25px; color: #6b7280; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
 
@@ -64,32 +170,98 @@
             <div class="question-text">{{ display_q }}</div>
 
             {% if not is_answered %}
-                <form action="/answer/{{ card.id }}" method="POST">
+                <form action="/answer/{{ card.id }}" method="POST" id="answerForm">
                     {% if mode == 'fill' %}
                         <div class="choices-list">
                             {% for choice in choices %}
                                 <button type="submit" name="user_answer" value="{{ choice|trim }}" class="choice-btn">{{ choice }}</button>
                             {% endfor %}
                         </div>
-                    {% else %}
+                    {% elif mode == 'ox' %}
                         <div class="ox-container">
                             <button type="submit" name="user_answer" value="正解" class="ox-btn ox-btn-o">○</button>
                             <button type="submit" name="user_answer" value="不正解" class="ox-btn ox-btn-x">×</button>
                         </div>
+                    {% elif mode == 'essay' %}
+                        <div class="essay-input-area">
+                            <textarea 
+                                name="user_answer" 
+                                id="essayInput"
+                                class="essay-textarea" 
+                                placeholder="あなたの回答をここに記述してください。できるだけ詳しく説明しましょう。"
+                                required
+                                minlength="20"
+                            ></textarea>
+                            <div class="char-counter">
+                                <span id="charCount">0</span> 文字
+                            </div>
+                            <button type="submit" class="submit-btn" id="submitBtn">
+                                回答を提出
+                            </button>
+                        </div>
                     {% endif %}
                 </form>
             {% else %}
+                <!-- AI評価フィードバック（記述式の場合） -->
+                {% if ai_feedback %}
+                <div class="ai-feedback-box">
+                    <div class="text-center">
+                        <div class="badge bg-info text-white mb-2">🤖 AI評価</div>
+                        <div class="ai-score">{{ ai_feedback.score }}点</div>
+                        <p class="mb-3" style="font-size: 1.1rem; color: #0c4a6e;">{{ ai_feedback.feedback }}</p>
+                    </div>
+                    
+                    {% if ai_feedback.strengths %}
+                    <div class="ai-feedback-section">
+                        <h6>✨ 良かった点</h6>
+                        <ul>
+                            {% for strength in ai_feedback.strengths %}
+                            <li>{{ strength }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% if ai_feedback.improvements %}
+                    <div class="ai-feedback-section improvements">
+                        <h6>📝 改善できる点</h6>
+                        <ul>
+                            {% for improvement in ai_feedback.improvements %}
+                            <li>{{ improvement }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- ユーザーの回答表示（記述式の場合） -->
+                {% if mode == 'essay' and user_answer %}
+                <div class="user-answer-display">
+                    <div class="label">あなたの回答</div>
+                    <div class="content">{{ user_answer }}</div>
+                </div>
+                {% endif %}
+
                 <div class="explanation-box {% if is_correct %}res-correct{% else %}res-wrong{% endif %}">
                     <div class="d-flex align-items-center mb-3">
                         <div style="font-size: 2.8rem; margin-right: 20px;">{% if is_correct %}⭕{% else %}❌{% endif %}</div>
-                        <div><h3 class="mb-0 fw-bold">{% if is_correct %}正解です！{% endif %}{% if not is_correct %}不正解です{% endif %}</h3></div>
+                        <div><h3 class="mb-0 fw-bold">{% if is_correct %}正解です!{% endif %}{% if not is_correct %}不正解です{% endif %}</h3></div>
                     </div>
-                    {% if not is_correct and mode == 'fill' %}
+                    {% if not is_correct and mode != 'essay' %}
                     <div class="correct-reveal">
                         <span class="badge bg-success mb-2" style="color:white;">正解の選択肢</span>
                         <div class="fs-4 fw-bold text-success">{{ correct_answer }}</div>
                     </div>
                     {% endif %}
+                    
+                    {% if mode == 'essay' %}
+                    <div class="correct-reveal">
+                        <span class="badge bg-success mb-2" style="color:white;">模範解答</span>
+                        <div class="fs-5" style="line-height: 1.6; color: #1f2937; white-space: pre-wrap;">{{ correct_answer }}</div>
+                    </div>
+                    {% endif %}
+                    
                     <hr style="border-top: 2px solid rgba(0,0,0,0.1);">
                     <div class="explanation-content">
                         <div class="fw-bold mb-2">【 解説 】</div>
@@ -108,7 +280,28 @@
 </div>
 
 <script>
-    // コンボ音源生成システム
+    // 記述式テキストエリアの文字数カウント
+    const essayInput = document.getElementById('essayInput');
+    const charCount = document.getElementById('charCount');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (essayInput) {
+        essayInput.addEventListener('input', function() {
+            const count = this.value.length;
+            charCount.textContent = count;
+            
+            // 最低文字数チェック
+            if (count < 20) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = `回答を提出 (最低20文字必要 / 現在${count}文字)`;
+            } else {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '回答を提出';
+            }
+        });
+    }
+
+    // コンボ音源生成システム 
     function playComboSound(isCorrect, combo) {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (!isCorrect) {
@@ -147,6 +340,15 @@
             playComboSound({{ 'true' if is_correct else 'false' }}, {{ combo }});
         });
     {% endif %}
+
+    // 二重送信防止
+    const answerForm = document.getElementById('answerForm');
+    if (answerForm) {
+        answerForm.addEventListener('submit', function() {
+            const buttons = this.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+        });
+    }
 </script>
 
 </body>
